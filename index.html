@@ -220,7 +220,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const BLOCK_SELECTOR='p,h1,h2,h3,h4,h5,h6,li,blockquote,figcaption,caption,dt,dd,td,th';
 const STATUS_LABELS={untranslated:'未译',ai:'已初译',reviewed:'已校对',final:'已定稿'};
 const STATUSES=Object.keys(STATUS_LABELS);
-const MODEL_SUGGESTIONS={anthropic:['claude-opus-4-8','claude-sonnet-4-6','claude-haiku-4-5-20251001'],openai:['deepseek-chat','deepseek-reasoner']};
+const MODEL_SUGGESTIONS={anthropic:['claude-opus-4-8','claude-sonnet-4-6','claude-haiku-4-5-20251001'],openai:['deepseek-v4-pro','deepseek-v4-flash','deepseek-chat']};
 const PROVIDER_HINTS={anthropic:{base:'官方留空即可（https://api.anthropic.com）',def:''},openai:{base:'DeepSeek 填 https://api.deepseek.com；中转站填其 Base URL',def:'https://api.deepseek.com'}};
 const BATCH=12;
 
