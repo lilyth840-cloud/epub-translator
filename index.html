@@ -162,15 +162,12 @@ button:disabled{opacity:.5;cursor:default}
 <div id="modal-settings" class="modal hidden">
   <div class="modal-box">
     <h3>设置</h3>
-    <label class="field"><span>翻译引擎</span>
-      <select id="provider">
-        <option value="openai">OpenAI 兼容（DeepSeek / 中转站）</option>
-        <option value="anthropic">Claude（Anthropic 官方）</option>
-      </select>
+    <label class="field"><span>翻译服务</span>
+      <select id="provider"></select>
     </label>
     <label class="field"><span>API Key</span>
       <input type="password" id="api-key" placeholder="sk-..." />
-      <small>只存在当前浏览器本地，不上传。</small>
+      <small id="api-key-hint">只存在当前浏览器本地，不上传。</small>
     </label>
     <label class="field"><span>接入地址 Base URL</span>
       <input type="text" id="api-base" />
@@ -220,8 +217,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const BLOCK_SELECTOR='p,h1,h2,h3,h4,h5,h6,li,blockquote,figcaption,caption,dt,dd,td,th';
 const STATUS_LABELS={untranslated:'未译',ai:'已初译',reviewed:'已校对',final:'已定稿'};
 const STATUSES=Object.keys(STATUS_LABELS);
-const MODEL_SUGGESTIONS={anthropic:['claude-opus-4-8','claude-sonnet-4-6','claude-haiku-4-5-20251001'],openai:['deepseek-v4-pro','deepseek-v4-flash','deepseek-chat']};
-const PROVIDER_HINTS={anthropic:{base:'官方留空即可（https://api.anthropic.com）',def:''},openai:{base:'DeepSeek 填 https://api.deepseek.com；中转站填其 Base URL',def:'https://api.deepseek.com'}};
+// 服务预设：每个服务各存各的 key
+const PRESETS={
+  deepseek:{label:'DeepSeek',provider:'openai',base:'https://api.deepseek.com',fixed:true,hint:'sk-...（platform.deepseek.com）',models:['deepseek-v4-pro','deepseek-v4-flash']},
+  kimi:{label:'Kimi（月之暗面 Moonshot）',provider:'openai',base:'https://api.moonshot.cn/v1',fixed:true,hint:'sk-...（platform.moonshot.cn；海外账号改 api.moonshot.ai/v1）',models:['kimi-k2-0905-preview','kimi-k2-turbo-preview','moonshot-v1-32k','moonshot-v1-128k']},
+  glm:{label:'智谱 GLM',provider:'openai',base:'https://open.bigmodel.cn/api/paas/v4',fixed:true,hint:'控制台密钥（bigmodel.cn）',models:['glm-4.6','glm-4-plus','glm-4-flash','glm-4.5']},
+  gemini:{label:'Gemini（Google）',provider:'openai',base:'https://generativelanguage.googleapis.com/v1beta/openai',fixed:true,hint:'AIza...（aistudio.google.com，可能需科学上网）',models:['gemini-2.5-pro','gemini-2.5-flash','gemini-2.0-flash']},
+  claude:{label:'Claude（Anthropic 官方）',provider:'anthropic',base:'',fixed:true,hint:'sk-ant-...',models:['claude-opus-4-8','claude-sonnet-4-6','claude-fable-5','claude-haiku-4-5-20251001']},
+  custom:{label:'其它 OpenAI 兼容 / 中转站',provider:'openai',base:'',fixed:false,hint:'中转站给的 key',models:[]},
+};
+const PRESET_ORDER=['deepseek','kimi','glm','gemini','claude','custom'];
+const PRESET_DEFAULT_MODEL={deepseek:'deepseek-v4-flash',kimi:'kimi-k2-0905-preview',glm:'glm-4-flash',gemini:'gemini-2.5-flash',claude:'claude-opus-4-8',custom:''};
 const BATCH=12;
 
 const state={project:null,chapterId:null};
@@ -230,10 +236,17 @@ const job={running:false,cancel:false,total:0,done:0,current:''};
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
 
-/* ============ 设置（localStorage） ============ */
+/* ============ 设置（localStorage，每服务分开存 key） ============ */
 function getSettings(){try{return JSON.parse(localStorage.getItem('ept.settings'))||{}}catch{return{}}}
 function storeSettings(s){localStorage.setItem('ept.settings',JSON.stringify(s));}
-function effSettings(p){const s=getSettings();return{provider:s.provider||'openai',apiKey:s.apiKey||'',baseURL:s.baseURL||'',model:(p&&p.model)||s.model||(s.provider==='anthropic'?'claude-opus-4-8':'deepseek-chat')};}
+function activePreset(){const s=getSettings();return (s.activePreset&&PRESETS[s.activePreset])?s.activePreset:'deepseek';}
+function presetKey(preset){const s=getSettings();return (s.presetKeys&&s.presetKeys[preset])||'';}
+function effSettings(p){
+  const s=getSettings();const preset=activePreset();const def=PRESETS[preset];
+  let baseURL=def.base; if(preset==='custom')baseURL=s.customBase||'';
+  return{preset,provider:def.provider,apiKey:presetKey(preset),baseURL,
+    model:(p&&p.model)||s.defaultModel||PRESET_DEFAULT_MODEL[preset]||'deepseek-v4-flash'};
+}
 
 /* ============ IndexedDB ============ */
 let _db=null;
@@ -559,20 +572,36 @@ async function translateScope(chapterIds){
 }
 
 /* ============ 设置 / 术语表 ============ */
-function fillModelDatalist(provider){const dl=$('#model-suggestions');dl.innerHTML='';for(const id of (MODEL_SUGGESTIONS[provider]||[])){const o=document.createElement('option');o.value=id;dl.appendChild(o);}}
-function applyProviderUI(provider){fillModelDatalist(provider);$('#api-base-hint').textContent=PROVIDER_HINTS[provider].base;}
+function fillModelDatalist(preset){const dl=$('#model-suggestions');dl.innerHTML='';for(const id of ((PRESETS[preset]||PRESETS.custom).models)){const o=document.createElement('option');o.value=id;dl.appendChild(o);}}
+function fillPresetSelect(){const sel=$('#provider');if(sel.options.length)return;for(const p of PRESET_ORDER){const o=document.createElement('option');o.value=p;o.textContent=PRESETS[p].label;sel.appendChild(o);}}
+function applyPresetUI(preset,keepFields){
+  const def=PRESETS[preset]||PRESETS.custom;const s=getSettings();
+  fillModelDatalist(preset);
+  const baseEl=$('#api-base');
+  if(def.fixed){baseEl.value=def.base||'（该服务无需填地址）';baseEl.readOnly=true;baseEl.style.opacity='0.7';}
+  else{baseEl.readOnly=false;baseEl.style.opacity='1';if(!keepFields)baseEl.value=s.customBase||'';}
+  const keyed=presetKey(preset);
+  $('#api-key').value='';
+  $('#api-key-hint').textContent=keyed?'该服务已配置（留空则保持不变）':('尚未配置 · '+def.hint);
+  $('#api-base-hint').textContent=def.fixed?'已按所选服务自动填好':'中转站/自建请填其 Base URL';
+  if(!keepFields)$('#default-model').value=(preset===activePreset()&&s.defaultModel)?s.defaultModel:(def.models[0]||'');
+}
 function openSettings(){
-  const s=getSettings();
-  const provider=s.provider||'openai';
-  $('#provider').value=provider;
-  $('#api-key').value=s.apiKey||'';
-  $('#api-base').value=s.baseURL||'';
-  $('#default-model').value=s.model||MODEL_SUGGESTIONS[provider][0];
-  applyProviderUI(provider);
+  fillPresetSelect();
+  const preset=activePreset();
+  $('#provider').value=preset;
+  applyPresetUI(preset,false);
   $('#modal-settings').classList.remove('hidden');
 }
 function saveSettingsUI(){
-  storeSettings({provider:$('#provider').value,apiKey:$('#api-key').value.trim(),baseURL:$('#api-base').value.trim(),model:$('#default-model').value.trim()});
+  const s=getSettings();const preset=$('#provider').value;
+  s.activePreset=preset;
+  s.presetKeys=s.presetKeys||{};
+  const key=$('#api-key').value.trim();
+  if(key)s.presetKeys[preset]=key;
+  if(preset==='custom')s.customBase=$('#api-base').value.trim();
+  s.defaultModel=$('#default-model').value.trim();
+  storeSettings(s);
   $('#modal-settings').classList.add('hidden');toast('设置已保存（仅存本浏览器）');
 }
 function openGlossary(){
@@ -617,7 +646,7 @@ function bind(){
   $('#import-json').addEventListener('change',e=>{if(e.target.files[0])handleImportJson(e.target.files[0]);e.target.value='';});
   $('#settings-cancel').addEventListener('click',()=>$('#modal-settings').classList.add('hidden'));
   $('#settings-save').addEventListener('click',saveSettingsUI);
-  $('#provider').addEventListener('change',e=>{const pv=e.target.value;applyProviderUI(pv);$('#api-base').value=PROVIDER_HINTS[pv].def;$('#default-model').value=MODEL_SUGGESTIONS[pv][0];});
+  $('#provider').addEventListener('change',e=>{applyPresetUI(e.target.value,false);});
   $('#btn-glossary').addEventListener('click',openGlossary);
   $('#glossary-add').addEventListener('click',()=>addGlossaryRow());
   $('#glossary-cancel').addEventListener('click',()=>$('#modal-glossary').classList.add('hidden'));
