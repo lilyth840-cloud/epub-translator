@@ -223,11 +223,12 @@ const PRESETS={
   kimi:{label:'Kimi（月之暗面 Moonshot）',provider:'openai',base:'https://api.moonshot.cn/v1',fixed:true,hint:'sk-...（platform.moonshot.cn；海外账号改 api.moonshot.ai/v1）',models:['kimi-k2-0905-preview','kimi-k2-turbo-preview','moonshot-v1-32k','moonshot-v1-128k']},
   glm:{label:'智谱 GLM',provider:'openai',base:'https://open.bigmodel.cn/api/paas/v4',fixed:true,hint:'控制台密钥（bigmodel.cn）',models:['glm-4.6','glm-4-plus','glm-4-flash','glm-4.5']},
   gemini:{label:'Gemini（Google）',provider:'openai',base:'https://generativelanguage.googleapis.com/v1beta/openai',fixed:true,hint:'AIza...（aistudio.google.com，可能需科学上网）',models:['gemini-2.5-pro','gemini-2.5-flash','gemini-2.0-flash']},
+  openrouter:{label:'OpenRouter（一个 key 通吃全部模型）',provider:'openai',base:'https://openrouter.ai/api/v1',fixed:true,hint:'sk-or-...（openrouter.ai/keys）',models:['deepseek/deepseek-chat','anthropic/claude-3.7-sonnet','google/gemini-2.5-flash','openai/gpt-4o-mini']},
   claude:{label:'Claude（Anthropic 官方）',provider:'anthropic',base:'',fixed:true,hint:'sk-ant-...',models:['claude-opus-4-8','claude-sonnet-4-6','claude-fable-5','claude-haiku-4-5-20251001']},
   custom:{label:'其它 OpenAI 兼容 / 中转站',provider:'openai',base:'',fixed:false,hint:'中转站给的 key',models:[]},
 };
-const PRESET_ORDER=['deepseek','kimi','glm','gemini','claude','custom'];
-const PRESET_DEFAULT_MODEL={deepseek:'deepseek-v4-flash',kimi:'kimi-k2-0905-preview',glm:'glm-4-flash',gemini:'gemini-2.5-flash',claude:'claude-opus-4-8',custom:''};
+const PRESET_ORDER=['deepseek','kimi','glm','gemini','openrouter','claude','custom'];
+const PRESET_DEFAULT_MODEL={deepseek:'deepseek-v4-flash',kimi:'kimi-k2-0905-preview',glm:'glm-4-flash',gemini:'gemini-2.5-flash',openrouter:'deepseek/deepseek-chat',claude:'claude-opus-4-8',custom:''};
 const BATCH=12;
 
 const state={project:null,chapterId:null};
